@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Zap, Shield, Brain, Play, RotateCcw, ChevronRight, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
+import { Key, Zap, Shield, Brain, Play, RotateCcw, ChevronRight, CheckCircle, XCircle, BarChart3, ChevronLeft, Radio } from 'lucide-react';
 
 // Types
 interface QubitData {
@@ -46,6 +46,8 @@ const App: React.FC = () => {
   const [selectedExperiment, setSelectedExperiment] = useState<string | null>(null);
   const [experimentResults, setExperimentResults] = useState<any[]>([]);
   const [qberData, setQberData] = useState<any>(null);
+  const [stepMode, setStepMode] = useState(false);
+  const [isTransmitting, setIsTransmitting] = useState(false);
 
   const preQuizQuestions: QuizQuestion[] = [
     {
@@ -229,6 +231,22 @@ const App: React.FC = () => {
     }
   };
 
+  const getBasisVector = (bit: number, basis: number) => {
+    if (basis === 0) { // Rectilinear basis
+      return bit === 0 ? '|0⟩' : '|1⟩';
+    } else { // Diagonal basis
+      return bit === 0 ? '|+⟩' : '|-⟩';
+    }
+  };
+
+  const getPolarizationFromBasis = (bit: number, basis: number) => {
+    if (basis === 0) { // Rectilinear basis
+      return bit === 0 ? '↑' : '→';
+    } else { // Diagonal basis
+      return bit === 0 ? '↗' : '↖';
+    }
+  };
+
   const measurePhoton = (polarization: string, basis: string, isNoisy: boolean, isIntercepted: boolean) => {
     const originalBasis = polarization === '↕' || polarization === '↔' ? 'rectilinear' : 'diagonal';
     
@@ -253,6 +271,92 @@ const App: React.FC = () => {
     }
     
     return Math.floor(Math.random() * 2);
+  };
+
+  const startStepSimulation = () => {
+    resetSimulation();
+    setStepMode(true);
+    setCurrentStep(0);
+    
+    // Generate data for step simulation
+    const data: QubitData[] = [];
+    
+    for (let i = 0; i < qubits; i++) {
+      const aliceBit = generateRandomBit();
+      const aliceBasis = generateRandomBasis();
+      const polarization = getPolarization(aliceBit, aliceBasis);
+      const bobBasis = generateRandomBasis();
+      
+      const isNoisy = Math.random() < (noise / 100);
+      const isIntercepted = Math.random() < (eavesdropping / 100);
+      
+      const bobMeasurement = measurePhoton(polarization, bobBasis, isNoisy, isIntercepted);
+      const basesMatch = aliceBasis === bobBasis;
+      const isKept = basesMatch && !isNoisy;
+      
+      data.push({
+        aliceBit,
+        aliceBasis,
+        polarization,
+        bobBasis,
+        bobMeasurement,
+        basesMatch,
+        isNoisy,
+        isIntercepted,
+        isKept
+      });
+    }
+    
+    setSimulationData(data);
+  };
+
+  const nextStep = () => {
+    if (currentStep < simulationData.length) {
+      setIsTransmitting(true);
+      setTimeout(() => {
+        setCurrentStep(currentStep + 1);
+        setIsTransmitting(false);
+      }, 1500);
+    } else {
+      // Calculate QBER and finish
+      let totalErrors = 0;
+      let totalComparisons = 0;
+      
+      simulationData.forEach(data => {
+        if (data.aliceBasis === data.bobBasis) {
+          totalComparisons++;
+          if (data.bobMeasurement !== data.aliceBit) {
+            totalErrors++;
+          }
+        }
+      });
+      
+      const qber = totalComparisons > 0 ? (totalErrors / totalComparisons) * 100 : 0;
+      const securityThreshold = 11;
+      const isSecure = qber < securityThreshold;
+
+      const qberAnalysis = {
+        qber: qber,
+        totalBits: qubits,
+        matchingBases: totalComparisons,
+        errors: totalErrors,
+        correctBits: totalComparisons - totalErrors,
+        finalKeyLength: simulationData.filter(d => d.isKept).length,
+        efficiency: (simulationData.filter(d => d.isKept).length / qubits) * 100,
+        isSecure: isSecure,
+        securityThreshold: securityThreshold,
+        estimatedEavesdropping: Math.max(0, (qber - noise) * 2),
+      };
+
+      setQberData(qberAnalysis);
+      setStepMode(false);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
   };
 
   const runSimulation = () => {
@@ -364,6 +468,8 @@ const App: React.FC = () => {
     setSimulationData([]);
     setCurrentStep(0);
     setIsRunning(false);
+    setStepMode(false);
+    setIsTransmitting(false);
   };
 
   const calculateStats = () => {
@@ -696,7 +802,7 @@ const App: React.FC = () => {
                 value={qubits}
                 onChange={(e) => setQubits(parseInt(e.target.value))}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                disabled={isRunning}
+                disabled={isRunning || stepMode}
               />
             </div>
             
@@ -711,7 +817,7 @@ const App: React.FC = () => {
                 value={noise}
                 onChange={(e) => setNoise(parseInt(e.target.value))}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                disabled={isRunning}
+                disabled={isRunning || stepMode}
               />
             </div>
             
@@ -726,7 +832,7 @@ const App: React.FC = () => {
                 value={eavesdropping}
                 onChange={(e) => setEavesdropping(parseInt(e.target.value))}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                disabled={isRunning}
+                disabled={isRunning || stepMode}
               />
             </div>
           </div>
@@ -734,12 +840,21 @@ const App: React.FC = () => {
           {/* Control Buttons */}
           <div className="flex space-x-4 mb-8">
             <button
-              onClick={runSimulation}
-              disabled={isRunning}
+              onClick={startStepSimulation}
+              disabled={isRunning || stepMode}
               className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
             >
               <Play className="w-5 h-5" />
-              <span>{isRunning ? 'Running...' : 'Start Simulation'}</span>
+              <span>Step-by-Step</span>
+            </button>
+            
+            <button
+              onClick={runSimulation}
+              disabled={isRunning || stepMode}
+              className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+            >
+              <Zap className="w-5 h-5" />
+              <span>{isRunning ? 'Running...' : 'Quick Run'}</span>
             </button>
             
             <button
@@ -753,7 +868,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          {(isRunning || simulationData.length > 0) && (
+          {(isRunning || simulationData.length > 0) && !stepMode && (
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">Protocol Progress</h3>
@@ -788,8 +903,193 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {/* Step-by-Step Simulation */}
+          {stepMode && (
+            <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-800 flex items-center">
+                  <Radio className="w-6 h-6 mr-3 text-blue-500" />
+                  Step-by-Step BB84 Protocol
+                </h3>
+                <div className="text-sm text-gray-500">
+                  Step {currentStep + 1} of {simulationData.length + 1}
+                </div>
+              </div>
+
+              {currentStep < simulationData.length ? (
+                <div className="space-y-6">
+                  {/* Current Bit Transmission */}
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-lg border">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                      Transmitting Bit #{currentStep + 1}
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Alice's Side */}
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <h5 className="font-semibold text-blue-600 mb-3 flex items-center">
+                          👩‍🔬 Alice (Sender)
+                        </h5>
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Bit to send:</span>
+                            <span className="font-mono font-bold text-lg">{simulationData[currentStep].aliceBit}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Chosen basis:</span>
+                            <span className="font-mono">{simulationData[currentStep].aliceBasis === 'rectilinear' ? 'Rectilinear (+)' : 'Diagonal (×)'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Basis vector:</span>
+                            <span className="font-mono text-purple-600 font-bold">
+                              {getBasisVector(simulationData[currentStep].aliceBit, simulationData[currentStep].aliceBasis === 'rectilinear' ? 0 : 1)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Polarization:</span>
+                            <span className="text-2xl">
+                              {simulationData[currentStep].polarization}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bob's Side */}
+                      <div className="bg-white p-4 rounded-lg shadow-sm">
+                        <h5 className="font-semibold text-green-600 mb-3 flex items-center">
+                          🔬 Bob (Receiver)
+                        </h5>
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Chosen basis:</span>
+                            <span className="font-mono">{simulationData[currentStep].bobBasis === 'rectilinear' ? 'Rectilinear (+)' : 'Diagonal (×)'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Measurement vector:</span>
+                            <span className="font-mono text-purple-600 font-bold">
+                              {getBasisVector(0, simulationData[currentStep].bobBasis === 'rectilinear' ? 0 : 1)} / {getBasisVector(1, simulationData[currentStep].bobBasis === 'rectilinear' ? 0 : 1)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Measured bit:</span>
+                            <span className="font-mono font-bold text-lg">{simulationData[currentStep].bobMeasurement}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Bases match:</span>
+                            <span className={`font-semibold ${simulationData[currentStep].basesMatch ? 'text-green-600' : 'text-orange-600'}`}>
+                              {simulationData[currentStep].basesMatch ? '✓ Yes' : '✗ No'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quantum Transmission Visualization */}
+                    <div className="mt-6 bg-gray-50 p-4 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="text-center">
+                          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-2">
+                            <span className="text-2xl">👩‍🔬</span>
+                          </div>
+                          <div className="text-sm font-medium">Alice</div>
+                          <div className="text-xs text-gray-500">Prepares qubit</div>
+                        </div>
+                        
+                        <div className="flex-1 mx-4 relative">
+                          <div className="h-1 bg-gray-200 rounded-full relative overflow-hidden">
+                            <div 
+                              className={`h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-1500 ${isTransmitting ? 'w-full' : 'w-0'}`}
+                            ></div>
+                          </div>
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                            <div className={`text-2xl transition-all duration-1500 ${isTransmitting ? 'animate-pulse' : ''}`}>
+                              {simulationData[currentStep].polarization}
+                            </div>
+                          </div>
+                          <div className="text-center mt-2">
+                            <div className="text-xs text-gray-500">Quantum Channel</div>
+                            <div className="text-xs font-mono text-purple-600">
+                              {getBasisVector(simulationData[currentStep].aliceBit, simulationData[currentStep].aliceBasis === 'rectilinear' ? 0 : 1)}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-center">
+                          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-2">
+                            <span className="text-2xl">🔬</span>
+                          </div>
+                          <div className="text-sm font-medium">Bob</div>
+                          <div className="text-xs text-gray-500">Measures qubit</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Analysis */}
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                      <h6 className="font-semibold text-gray-800 mb-2">Analysis:</h6>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>• Alice encodes bit <strong>{simulationData[currentStep].aliceBit}</strong> using <strong>{simulationData[currentStep].aliceBasis}</strong> basis</p>
+                        <p>• Bob measures using <strong>{simulationData[currentStep].bobBasis}</strong> basis</p>
+                        <p>• Bases {simulationData[currentStep].basesMatch ? '<strong>match</strong> - bit will be kept for final key' : '<strong>don\'t match</strong> - bit will be discarded'}</p>
+                        {(simulationData[currentStep].isNoisy || simulationData[currentStep].isIntercepted) && (
+                          <p className="text-red-600">• <strong>Error detected!</strong> This contributes to QBER</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Navigation */}
+                  <div className="flex justify-between items-center">
+                    <button
+                      onClick={prevStep}
+                      disabled={currentStep === 0}
+                      className="flex items-center px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Previous
+                    </button>
+                    
+                    <div className="text-center">
+                      <div className="text-sm text-gray-500 mb-1">Progress</div>
+                      <div className="w-48 bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${((currentStep + 1) / (simulationData.length + 1)) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={nextStep}
+                      disabled={isTransmitting}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      {currentStep < simulationData.length - 1 ? 'Next Bit' : 'Finish'}
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <h4 className="text-xl font-semibold text-gray-800 mb-4">
+                    🎉 Transmission Complete!
+                  </h4>
+                  <p className="text-gray-600 mb-4">
+                    All {simulationData.length} qubits have been transmitted. Click "View Results" to see the analysis.
+                  </p>
+                  <button
+                    onClick={nextStep}
+                    className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    View Results & QBER Analysis
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Horizontal Bit Visualization */}
-          {simulationData.length > 0 && (
+          {simulationData.length > 0 && !stepMode && (
             <div className="mb-8">
               <h3 className="text-lg font-semibold mb-4">Bit Transmission Visualization</h3>
               
