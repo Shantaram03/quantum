@@ -34,15 +34,10 @@ interface ExperimentConfig {
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('theory');
   const [qubits, setQubits] = useState(20);
-  const [noise, setNoise] = useState(10);
+  const [noise, setNoise] = useState(0);
   const [eavesdropping, setEavesdropping] = useState(0);
-  const [simulationResult, setSimulationResult] = useState<any>(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [isStepMode, setIsStepMode] = useState(false);
-  const [stepData, setStepData] = useState<any>(null);
-
-  // Pre-quiz state
   const [simulationData, setSimulationData] = useState<QubitData[]>([]);
+  const [currentStep, setCurrentStep] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [preQuizScore, setPreQuizScore] = useState<number | null>(null);
   const [preQuizAnswers, setPreQuizAnswers] = useState<number[]>([]);
@@ -261,146 +256,96 @@ const App: React.FC = () => {
   };
 
   const runSimulation = () => {
-    setIsStepMode(false);
+    setIsRunning(true);
     setCurrentStep(0);
-    setStepData(null);
     
-    const aliceBits = Array.from({ length: qubits }, () => Math.random() < 0.5 ? 0 : 1);
-    const aliceBases = Array.from({ length: qubits }, () => Math.random() < 0.5 ? 0 : 1);
-    const bobBases = Array.from({ length: qubits }, () => Math.random() < 0.5 ? 0 : 1);
+    const data: QubitData[] = [];
+    let totalErrors = 0;
+    let totalComparisons = 0;
     
-    // Simulate Bob's measurements with noise and eavesdropping
-    const bobBits = aliceBits.map((bit, i) => {
-      let measuredBit = bit;
-      
-      // Apply eavesdropping effect
-      if (Math.random() < eavesdropping / 100) {
-        measuredBit = Math.random() < 0.5 ? 0 : 1;
-      }
-      
-      // Apply noise effect
-      if (Math.random() < noise / 100) {
-        measuredBit = 1 - measuredBit;
-      }
-      
-      // If bases don't match, result is random
-      if (aliceBases[i] !== bobBases[i]) {
-        measuredBit = Math.random() < 0.5 ? 0 : 1;
-      }
-      
-      return measuredBit;
-    });
-    
-    // Calculate matching bases
-    const matchingBases = aliceBases.filter((base, i) => base === bobBases[i]).length;
-    
-    // Calculate errors (only for matching bases)
-    let errors = 0;
     for (let i = 0; i < qubits; i++) {
-      if (aliceBases[i] === bobBases[i] && aliceBits[i] !== bobBits[i]) {
-        errors++;
+      const aliceBit = generateRandomBit();
+      const aliceBasis = generateRandomBasis();
+      const polarization = getPolarization(aliceBit, aliceBasis);
+      const bobBasis = generateRandomBasis();
+      
+      const isNoisy = Math.random() < (noise / 100);
+      const isIntercepted = Math.random() < (eavesdropping / 100);
+      
+      const bobMeasurement = measurePhoton(polarization, bobBasis, isNoisy, isIntercepted);
+      const basesMatch = aliceBasis === bobBasis;
+      const isKept = basesMatch && !isNoisy;
+      
+      if (aliceBasis === bobBasis) {
+        totalComparisons++;
+        if (bobMeasurement !== aliceBit) {
+          totalErrors++;
+        }
       }
+      
+      data.push({
+        aliceBit,
+        aliceBasis,
+        polarization,
+        bobBasis,
+        bobMeasurement,
+        basesMatch,
+        isNoisy,
+        isIntercepted,
+        isKept
+      });
     }
     
-    // Final key consists of bits where bases match and measurements agree
-    const finalKey = [];
-    for (let i = 0; i < qubits; i++) {
-      if (aliceBases[i] === bobBases[i] && aliceBits[i] === bobBits[i]) {
-        finalKey.push(aliceBits[i]);
-      }
-    }
-    
-    const result = {
-      aliceBits,
-      aliceBases,
-      bobBases,
-      bobBits,
-      matchingBases,
-      errors,
-      finalKeyLength: finalKey.length,
+    setSimulationData(data);
+
+    // Calculate QBER
+    const qber = totalComparisons > 0 ? (totalErrors / totalComparisons) * 100 : 0;
+    const securityThreshold = 11; // Standard BB84 security threshold
+    const isSecure = qber < securityThreshold;
+
+    // Generate QBER analysis data
+    const qberAnalysis = {
+      qber: qber,
       totalBits: qubits,
-      finalKey
+      matchingBases: totalComparisons,
+      errors: totalErrors,
+      correctBits: totalComparisons - totalErrors,
+      finalKeyLength: data.filter(d => d.isKept).length,
+      efficiency: (data.filter(d => d.isKept).length / qubits) * 100,
+      isSecure: isSecure,
+      securityThreshold: securityThreshold,
+      estimatedEavesdropping: Math.max(0, (qber - noise) * 2), // Rough estimate
     };
-    
-    setSimulationResult(result);
-  };
 
-  const startStepByStep = () => {
-    setIsStepMode(true);
-    setCurrentStep(0);
+    setQberData(qberAnalysis);
     
-    const aliceBits = Array.from({ length: qubits }, () => Math.random() < 0.5 ? 0 : 1);
-    const aliceBases = Array.from({ length: qubits }, () => Math.random() < 0.5 ? 0 : 1);
-    const bobBases = Array.from({ length: qubits }, () => Math.random() < 0.5 ? 0 : 1);
-    
-    // Generate polarizations based on Alice's bits and bases
-    const polarizations = aliceBits.map((bit, i) => {
-      const base = aliceBases[i];
-      if (base === 0) { // Rectilinear basis
-        return bit === 0 ? '↑' : '→';
-      } else { // Diagonal basis
-        return bit === 0 ? '↗' : '↖';
+    // Animate through steps
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      setCurrentStep(step);
+      if (step >= steps.length) {
+        clearInterval(interval);
+        setIsRunning(false);
+        
+        // Store experiment results
+        if (selectedExperiment) {
+          const keptBits = data.filter(d => d.isKept).length;
+          const errorRate = data.filter(d => d.isIntercepted || d.isNoisy).length / data.length;
+          
+          setExperimentResults(prev => [...prev, {
+            experiment: selectedExperiment,
+            totalBits: qubits,
+            keptBits,
+            efficiency: (keptBits / qubits) * 100,
+            errorRate: errorRate * 100,
+            noise,
+            eavesdropping,
+            timestamp: new Date().toLocaleTimeString()
+          }]);
+        }
       }
-    });
-    
-    // Bob's measurements with noise and eavesdropping
-    const bobBits = aliceBits.map((bit, i) => {
-      let finalBit = bit;
-      
-      // Apply eavesdropping
-      if (Math.random() < eavesdropping / 100) {
-        finalBit = Math.random() < 0.5 ? 0 : 1;
-      }
-      
-      // Apply noise
-      if (Math.random() < noise / 100) {
-        finalBit = 1 - finalBit;
-      }
-      
-      return finalBit;
-    });
-    
-    // Determine which bits to keep (matching bases)
-    const matchingBases = aliceBases.map((base, i) => base === bobBases[i]);
-    
-    setStepData({
-      aliceBits,
-      aliceBases,
-      bobBases,
-      bobBits,
-      polarizations,
-      matchingBases,
-      totalSteps: qubits + 2 // +2 for basis comparison and final key
-    });
-  };
-
-  const nextStep = () => {
-    if (stepData && currentStep < stepData.totalSteps - 1) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const resetStepMode = () => {
-    setIsStepMode(false);
-    setCurrentStep(0);
-    setStepData(null);
-  };
-
-  const getBasisVector = (basis: number, bit: number) => {
-    if (basis === 0) { // Rectilinear basis
-      return bit === 0 ? '|0⟩ = |↑⟩' : '|1⟩ = |→⟩';
-    } else { // Diagonal basis
-      return bit === 0 ? '|+⟩ = |↗⟩' : '|-⟩ = |↖⟩';
-    }
-  };
-
-  const getBasisName = (basis: number) => {
-    return basis === 0 ? 'Rectilinear (+)' : 'Diagonal (×)';
-  };
-
-  const calculateQBER = (result: any) => {
-    if (result.matchingBases === 0) return 0;
-    return (result.errors / result.matchingBases) * 100;
+    }, 800);
   };
 
   const runExperiment = (experiment: ExperimentConfig) => {
@@ -728,541 +673,360 @@ const App: React.FC = () => {
   );
 
   const SimulationSection = () => {
+    const stats = calculateStats();
+    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="max-w-7xl mx-auto p-6">
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">Simulation Controls</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Number of Qubits: {qubits}
-                  </label>
-                  <input
-                    type="range"
-                    min="10"
-                    max="50"
-                    value={qubits}
-                    onChange={(e) => setQubits(parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Noise Level: {noise}%
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="30"
-                    value={noise}
-                    onChange={(e) => setNoise(parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Eavesdropping: {eavesdropping}%
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="50"
-                    value={eavesdropping}
-                    onChange={(e) => setEavesdropping(parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                  />
-                </div>
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <h2 className="text-3xl font-bold text-gray-800 mb-6 flex items-center">
+            <Zap className="mr-3 text-yellow-600" />
+            Interactive BB84 Simulation
+          </h2>
+          
+          {/* Control Panel */}
+          <div className="grid md:grid-cols-3 gap-6 mb-8">
+            <div className="space-y-4">
+              <label className="block text-sm font-medium text-gray-700">
+                Number of Qubits: {qubits}
+              </label>
+              <input
+                type="range"
+                min="10"
+                max="50"
+                value={qubits}
+                onChange={(e) => setQubits(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                disabled={isRunning}
+              />
+            </div>
+            
+            <div className="space-y-4">
+              <label className="block text-sm font-medium text-gray-700">
+                Noise Level: {noise}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="30"
+                value={noise}
+                onChange={(e) => setNoise(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                disabled={isRunning}
+              />
+            </div>
+            
+            <div className="space-y-4">
+              <label className="block text-sm font-medium text-gray-700">
+                Eavesdropping: {eavesdropping}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                value={eavesdropping}
+                onChange={(e) => setEavesdropping(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                disabled={isRunning}
+              />
+            </div>
+          </div>
+
+          {/* Control Buttons */}
+          <div className="flex space-x-4 mb-8">
+            <button
+              onClick={runSimulation}
+              disabled={isRunning}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+            >
+              <Play className="w-5 h-5" />
+              <span>{isRunning ? 'Running...' : 'Start Simulation'}</span>
+            </button>
+            
+            <button
+              onClick={resetSimulation}
+              disabled={isRunning}
+              className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+            >
+              <RotateCcw className="w-5 h-5" />
+              <span>Reset</span>
+            </button>
+          </div>
+
+          {/* Progress Indicator */}
+          {(isRunning || simulationData.length > 0) && (
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Protocol Progress</h3>
+                <span className="text-sm text-gray-600">
+                  Step {currentStep} of {steps.length}
+                </span>
               </div>
               
-              <div className="flex gap-4 mt-6">
-                <button
-                  onClick={runSimulation}
-                  className="flex-1 bg-indigo-600 text-white py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-                >
-                  Run Full Simulation
-                </button>
-                <button
-                  onClick={startStepByStep}
-                  className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors font-medium"
-                >
-                  Step-by-Step Mode
-                </button>
+              <div className="flex items-center space-x-2 overflow-x-auto pb-4">
+                {steps.map((step, index) => (
+                  <div key={index} className="flex items-center space-x-2 flex-shrink-0">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      index < currentStep ? 'bg-green-500 text-white' : 
+                      index === currentStep ? 'bg-blue-500 text-white' : 
+                      'bg-gray-200 text-gray-600'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <span className={`text-sm whitespace-nowrap ${
+                      index < currentStep ? 'text-green-600' : 
+                      index === currentStep ? 'text-blue-600' : 
+                      'text-gray-500'
+                    }`}>
+                      {step}
+                    </span>
+                    {index < steps.length - 1 && (
+                      <ChevronRight className="w-4 h-4 text-gray-400 mx-2" />
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
+          )}
 
-            {/* Step-by-Step Simulation */}
-            {isStepMode && stepData && (
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-semibold text-gray-800">
-                    Step-by-Step BB84 Protocol
-                  </h3>
-                  <button
-                    onClick={resetStepMode}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    ✕ Exit Step Mode
-                  </button>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="mb-6">
-                  <div className="flex justify-between text-sm text-gray-600 mb-2">
-                    <span>Progress</span>
-                    <span>{currentStep + 1} / {stepData.totalSteps}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${((currentStep + 1) / stepData.totalSteps) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Step Content */}
-                <div className="space-y-6">
-                  {currentStep < qubits ? (
-                    // Individual bit steps
-                    <div className="border-2 border-indigo-200 rounded-lg p-6 bg-indigo-50">
-                      <h4 className="text-lg font-semibold mb-4 text-indigo-800">
-                        Bit {currentStep + 1} Transmission
-                      </h4>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Alice's Side */}
-                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                          <h5 className="font-semibold text-blue-800 mb-3 flex items-center">
-                            <span className="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
-                            Alice (Sender)
-                          </h5>
-                          <div className="space-y-3">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Bit Value:</span>
-                              <span className="font-mono text-lg font-bold text-blue-600">
-                                {stepData.aliceBits[currentStep]}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Basis:</span>
-                              <span className="font-mono text-sm">
-                                {getBasisName(stepData.aliceBases[currentStep])}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Basis Vector:</span>
-                              <span className="font-mono text-sm font-semibold text-blue-700">
-                                {getBasisVector(stepData.aliceBases[currentStep], stepData.aliceBits[currentStep])}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Polarization:</span>
-                              <span className="text-2xl">
-                                {stepData.polarizations[currentStep]}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Bob's Side */}
-                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                          <h5 className="font-semibold text-purple-800 mb-3 flex items-center">
-                            <span className="w-3 h-3 bg-purple-500 rounded-full mr-2"></span>
-                            Bob (Receiver)
-                          </h5>
-                          <div className="space-y-3">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Measurement Basis:</span>
-                              <span className="font-mono text-sm">
-                                {getBasisName(stepData.bobBases[currentStep])}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Basis Vector:</span>
-                              <span className="font-mono text-sm font-semibold text-purple-700">
-                                {getBasisVector(stepData.bobBases[currentStep], stepData.bobBits[currentStep])}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Measured Bit:</span>
-                              <span className="font-mono text-lg font-bold text-purple-600">
-                                {stepData.bobBits[currentStep]}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Bases Match:</span>
-                              <span className={`font-semibold ${stepData.matchingBases[currentStep] ? 'text-green-600' : 'text-red-600'}`}>
-                                {stepData.matchingBases[currentStep] ? '✓ Yes' : '✗ No'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Bit Status */}
-                      <div className="mt-4 p-3 rounded-lg bg-gray-50 border">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-700">Bit Status:</span>
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            stepData.matchingBases[currentStep] 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {stepData.matchingBases[currentStep] ? 'Kept for Key' : 'Discarded'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : currentStep === qubits ? (
-                    // Basis comparison step
-                    <div className="border-2 border-green-200 rounded-lg p-6 bg-green-50">
-                      <h4 className="text-lg font-semibold mb-4 text-green-800">
-                        Step {currentStep + 1}: Basis Comparison
-                      </h4>
-                      <p className="text-gray-700 mb-4">
-                        Alice and Bob publicly compare their measurement bases and keep only the bits where they used the same basis.
-                      </p>
-                      
-                      <div className="bg-white p-4 rounded-lg">
-                        <div className="grid grid-cols-8 gap-2 text-center text-sm">
-                          <div className="font-semibold text-gray-600">Bit #</div>
-                          <div className="font-semibold text-blue-600">Alice Basis</div>
-                          <div className="font-semibold text-purple-600">Bob Basis</div>
-                          <div className="font-semibold text-gray-600">Match?</div>
-                          <div className="font-semibold text-blue-600">Alice Bit</div>
-                          <div className="font-semibold text-purple-600">Bob Bit</div>
-                          <div className="font-semibold text-gray-600">Error?</div>
-                          <div className="font-semibold text-green-600">Keep?</div>
-                          
-                          {stepData.aliceBits.slice(0, Math.min(8, qubits)).map((_: any, i: number) => (
-                            <React.Fragment key={i}>
-                              <div className="py-1">{i + 1}</div>
-                              <div className="py-1 font-mono">{getBasisName(stepData.aliceBases[i]).split(' ')[1]}</div>
-                              <div className="py-1 font-mono">{getBasisName(stepData.bobBases[i]).split(' ')[1]}</div>
-                              <div className={`py-1 ${stepData.matchingBases[i] ? 'text-green-600' : 'text-red-600'}`}>
-                                {stepData.matchingBases[i] ? '✓' : '✗'}
-                              </div>
-                              <div className="py-1 font-mono font-bold text-blue-600">{stepData.aliceBits[i]}</div>
-                              <div className="py-1 font-mono font-bold text-purple-600">{stepData.bobBits[i]}</div>
-                              <div className={`py-1 ${stepData.aliceBits[i] !== stepData.bobBits[i] && stepData.matchingBases[i] ? 'text-red-600' : 'text-green-600'}`}>
-                                {stepData.matchingBases[i] ? (stepData.aliceBits[i] !== stepData.bobBits[i] ? '✗' : '✓') : '-'}
-                              </div>
-                              <div className={`py-1 font-semibold ${stepData.matchingBases[i] ? 'text-green-600' : 'text-gray-400'}`}>
-                                {stepData.matchingBases[i] ? '✓' : '✗'}
-                              </div>
-                            </React.Fragment>
-                          ))}
-                        </div>
-                        {qubits > 8 && (
-                          <p className="text-center text-gray-500 mt-2 text-sm">
-                            Showing first 8 bits. Total: {qubits} bits
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    // Final key generation step
-                    <div className="border-2 border-purple-200 rounded-lg p-6 bg-purple-50">
-                      <h4 className="text-lg font-semibold mb-4 text-purple-800">
-                        Step {currentStep + 1}: Final Secure Key
-                      </h4>
-                      <p className="text-gray-700 mb-4">
-                        The final secure key consists of bits where Alice and Bob used matching bases and measured the same values.
-                      </p>
-                      
-                      <div className="bg-white p-4 rounded-lg">
-                        <div className="text-center">
-                          <div className="text-sm text-gray-600 mb-2">Secure Key Bits:</div>
-                          <div className="font-mono text-2xl font-bold text-purple-600 bg-purple-100 p-3 rounded">
-                            {stepData.aliceBits
-                              .filter((_: any, i: number) => stepData.matchingBases[i] && stepData.aliceBits[i] === stepData.bobBits[i])
-                              .join('')}
-                          </div>
-                          <div className="text-sm text-gray-500 mt-2">
-                            Key Length: {stepData.aliceBits.filter((_: any, i: number) => stepData.matchingBases[i] && stepData.aliceBits[i] === stepData.bobBits[i]).length} bits
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Navigation */}
-                <div className="flex justify-between items-center mt-6">
-                  <div className="text-sm text-gray-600">
-                    {currentStep < qubits 
-                      ? `Processing bit ${currentStep + 1} of ${qubits}`
-                      : currentStep === qubits 
-                        ? 'Comparing measurement bases'
-                        : 'Generating final secure key'
-                    }
-                  </div>
-                  <button
-                    onClick={nextStep}
-                    disabled={currentStep >= stepData.totalSteps - 1}
-                    className="bg-indigo-600 text-white py-2 px-6 rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {currentStep >= stepData.totalSteps - 1 ? 'Complete' : 'Next Step →'}
-                  </button>
+          {/* Horizontal Bit Visualization */}
+          {simulationData.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold mb-4">Bit Transmission Visualization</h3>
+              
+              {/* Legend */}
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold mb-2">Legend:</h4>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span className="flex items-center space-x-1">
+                    <div className="w-4 h-4 bg-blue-500 rounded"></div>
+                    <span>Alice's Data</span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <div className="w-4 h-4 bg-purple-500 rounded"></div>
+                    <span>Bases</span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <div className="w-4 h-4 bg-green-500 rounded"></div>
+                    <span>Bob's Data</span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+                    <span>Noisy</span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <div className="w-4 h-4 bg-red-500 rounded"></div>
+                    <span>Intercepted</span>
+                  </span>
+                  <span className="flex items-center space-x-1">
+                    <div className="w-4 h-4 bg-indigo-600 rounded"></div>
+                    <span>Final Key</span>
+                  </span>
                 </div>
               </div>
-            )}
 
-            {/* Simulation Results */}
-            {simulationResult && !isStepMode && (
-              <div className="space-y-6">
-                {/* QBER Analysis */}
-                <div className="bg-white p-6 rounded-lg shadow-sm">
-                  <h3 className="text-xl font-semibold mb-4 text-gray-800">QBER Analysis & Security Assessment</h3>
-                  
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <div className="text-2xl font-bold text-blue-600">{simulationResult.totalBits}</div>
-                        <div className="text-sm text-gray-600">Total Bits</div>
-                      </div>
-                      <div className="bg-green-50 p-3 rounded-lg">
-                        <div className="text-2xl font-bold text-green-600">{simulationResult.matchingBases}</div>
-                        <div className="text-sm text-gray-600">Matching Bases</div>
-                      </div>
-                      <div className="bg-red-50 p-3 rounded-lg">
-                        <div className="text-2xl font-bold text-red-600">{simulationResult.errors}</div>
-                        <div className="text-sm text-gray-600">Errors</div>
-                      </div>
-                      <div className="bg-purple-50 p-3 rounded-lg">
-                        <div className="text-2xl font-bold text-purple-600">{simulationResult.finalKeyLength}</div>
-                        <div className="text-sm text-gray-600">Final Key Length</div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* QBER Graph */}
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold mb-3 text-gray-800">QBER Analysis</h4>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Current QBER</span>
-                            <span className="font-mono">{calculateQBER(simulationResult).toFixed(2)}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-4 relative">
-                            <div 
-                              className={`h-4 rounded-full transition-all duration-500 ${
-                                calculateQBER(simulationResult) > 11 ? 'bg-red-500' : 'bg-green-500'
-                              }`}
-                              style={{ width: `${Math.min(calculateQBER(simulationResult), 50)}%` }}
-                            ></div>
-                            <div className="absolute top-0 left-[22%] w-0.5 h-4 bg-yellow-500"></div>
-                          </div>
-                          <div className="flex justify-between text-xs text-gray-500">
-                            <span>0%</span>
-                            <span className="text-yellow-600">11% (Threshold)</span>
-                            <span>50%</span>
-                          </div>
-                          <div className={`text-center text-sm font-medium ${
-                            calculateQBER(simulationResult) > 11 ? 'text-red-600' : 'text-green-600'
-                          }`}>
-                            {calculateQBER(simulationResult) > 11 ? '⚠️ Security Compromised' : '✅ Secure Communication'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Efficiency Graph */}
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold mb-3 text-gray-800">Key Generation Efficiency</h4>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Efficiency</span>
-                            <span className="font-mono">{((simulationResult.finalKeyLength / simulationResult.totalBits) * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-4">
-                            <div 
-                              className="bg-indigo-500 h-4 rounded-full transition-all duration-500"
-                              style={{ width: `${(simulationResult.finalKeyLength / simulationResult.totalBits) * 100}%` }}
-                            ></div>
-                          </div>
-                          <div className="flex justify-between text-xs text-gray-500">
-                            <span>0%</span>
-                            <span>50%</span>
-                            <span>100%</span>
-                          </div>
-                          <div className="text-center text-sm text-indigo-600 font-medium">
-                            {simulationResult.finalKeyLength} / {simulationResult.totalBits} bits retained
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Security Assessment */}
-                    <div className={`p-4 rounded-lg border-2 ${
-                      calculateQBER(simulationResult) > 11 
-                        ? 'bg-red-50 border-red-200' 
-                        : 'bg-green-50 border-green-200'
-                    }`}>
-                      <h4 className={`font-semibold mb-2 ${
-                        calculateQBER(simulationResult) > 11 ? 'text-red-800' : 'text-green-800'
+              <div className="overflow-x-auto">
+                <div className="min-w-max space-y-3">
+                  {/* Alice's Bits Row */}
+                  <div className="flex items-center space-x-1">
+                    <div className="w-32 text-sm font-semibold text-blue-600">Alice's Bits:</div>
+                    {simulationData.map((data, index) => (
+                      <div key={index} className={`w-8 h-8 flex items-center justify-center text-sm font-bold rounded ${
+                        data.isKept ? 'bg-indigo-600 text-white' : 
+                        data.isNoisy ? 'bg-yellow-100 text-yellow-800' :
+                        data.isIntercepted ? 'bg-red-100 text-red-800' :
+                        'bg-blue-100 text-blue-800'
                       }`}>
-                        Security Assessment
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600">QBER:</span>
-                          <span className={`ml-2 font-mono font-bold ${
-                            calculateQBER(simulationResult) > 11 ? 'text-red-600' : 'text-green-600'
-                          }`}>
-                            {calculateQBER(simulationResult).toFixed(2)}%
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Estimated Eavesdropping:</span>
-                          <span className="ml-2 font-mono font-bold text-orange-600">
-                            {Math.max(0, (calculateQBER(simulationResult) - noise) * 2).toFixed(1)}%
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Status:</span>
-                          <span className={`ml-2 font-bold ${
-                            calculateQBER(simulationResult) > 11 ? 'text-red-600' : 'text-green-600'
-                          }`}>
-                            {calculateQBER(simulationResult) > 11 ? 'COMPROMISED' : 'SECURE'}
-                          </span>
-                        </div>
+                        {data.isKept ? data.aliceBit : data.basesMatch ? data.aliceBit : '·'}
                       </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bit Visualization */}
-                <div className="bg-white p-6 rounded-lg shadow-sm">
-                  <h3 className="text-xl font-semibold mb-4 text-gray-800">Bit Transmission Visualization</h3>
-                  
-                  {/* Legend */}
-                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                    <div className="text-sm font-medium text-gray-700 mb-2">Legend:</div>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-                      <div className="flex items-center">
-                        <span className="w-3 h-3 bg-blue-500 rounded mr-2"></span>
-                        Alice's Data
-                      </div>
-                      <div className="flex items-center">
-                        <span className="w-3 h-3 bg-purple-500 rounded mr-2"></span>
-                        Bob's Data
-                      </div>
-                      <div className="flex items-center">
-                        <span className="w-3 h-3 bg-green-500 rounded mr-2"></span>
-                        Matching Bases
-                      </div>
-                      <div className="flex items-center">
-                        <span className="w-3 h-3 bg-yellow-500 rounded mr-2"></span>
-                        Noisy Bits
-                      </div>
-                      <div className="flex items-center">
-                        <span className="w-3 h-3 bg-red-500 rounded mr-2"></span>
-                        Intercepted
-                      </div>
-                    </div>
+                    ))}
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <div className="min-w-max space-y-2">
-                      {/* Alice's Bits */}
-                      <div className="flex items-center space-x-1">
-                        <div className="w-32 text-sm font-medium text-blue-600">Alice's Bits:</div>
-                        {simulationResult.aliceBits.map((bit: number, i: number) => (
-                          <div key={i} className="w-8 h-8 bg-blue-100 border border-blue-300 rounded flex items-center justify-center text-sm font-mono font-bold text-blue-700">
-                            {bit}
-                          </div>
-                        ))}
+                  {/* Alice's Bases Row */}
+                  <div className="flex items-center space-x-1">
+                    <div className="w-32 text-sm font-semibold text-purple-600">Alice's Bases:</div>
+                    {simulationData.map((data, index) => (
+                      <div key={index} className={`w-8 h-8 flex items-center justify-center text-xs font-bold rounded ${
+                        data.isKept ? 'bg-indigo-600 text-white' : 
+                        'bg-purple-100 text-purple-800'
+                      }`}>
+                        {data.aliceBasis === 'rectilinear' ? '+' : '×'}
                       </div>
+                    ))}
+                  </div>
 
-                      {/* Alice's Bases */}
-                      <div className="flex items-center space-x-1">
-                        <div className="w-32 text-sm font-medium text-blue-600">Alice's Bases:</div>
-                        {simulationResult.aliceBases.map((base: number, i: number) => (
-                          <div key={i} className="w-8 h-8 bg-blue-50 border border-blue-200 rounded flex items-center justify-center text-xs font-mono">
-                            {base === 0 ? '+' : '×'}
-                          </div>
-                        ))}
+                  {/* Polarization Row */}
+                  <div className="flex items-center space-x-1">
+                    <div className="w-32 text-sm font-semibold text-indigo-600">Polarization:</div>
+                    {simulationData.map((data, index) => (
+                      <div key={index} className={`w-8 h-8 flex items-center justify-center text-lg font-bold rounded ${
+                        data.isKept ? 'bg-indigo-600 text-white' : 
+                        data.isNoisy ? 'bg-yellow-100 text-yellow-800' :
+                        data.isIntercepted ? 'bg-red-100 text-red-800' :
+                        'bg-indigo-100 text-indigo-800'
+                      }`}>
+                        {data.polarization}
                       </div>
+                    ))}
+                  </div>
 
-                      {/* Polarization */}
-                      <div className="flex items-center space-x-1">
-                        <div className="w-32 text-sm font-medium text-indigo-600">Polarization:</div>
-                        {simulationResult.aliceBits.map((bit: number, i: number) => {
-                          const base = simulationResult.aliceBases[i];
-                          const polarization = base === 0 ? (bit === 0 ? '↑' : '→') : (bit === 0 ? '↗' : '↖');
-                          return (
-                            <div key={i} className="w-8 h-8 bg-indigo-50 border border-indigo-200 rounded flex items-center justify-center text-lg">
-                              {polarization}
-                            </div>
-                          );
-                        })}
+                  {/* Bob's Bases Row */}
+                  <div className="flex items-center space-x-1">
+                    <div className="w-32 text-sm font-semibold text-green-600">Bob's Bases:</div>
+                    {simulationData.map((data, index) => (
+                      <div key={index} className={`w-8 h-8 flex items-center justify-center text-xs font-bold rounded ${
+                        data.isKept ? 'bg-indigo-600 text-white' : 
+                        data.basesMatch ? 'bg-green-100 text-green-800' : 
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {data.bobBasis === 'rectilinear' ? '+' : '×'}
                       </div>
+                    ))}
+                  </div>
 
-                      {/* Bob's Bases */}
-                      <div className="flex items-center space-x-1">
-                        <div className="w-32 text-sm font-medium text-purple-600">Bob's Bases:</div>
-                        {simulationResult.bobBases.map((base: number, i: number) => (
-                          <div key={i} className="w-8 h-8 bg-purple-50 border border-purple-200 rounded flex items-center justify-center text-xs font-mono">
-                            {base === 0 ? '+' : '×'}
-                          </div>
-                        ))}
+                  {/* Bob's Measurements Row */}
+                  <div className="flex items-center space-x-1">
+                    <div className="w-32 text-sm font-semibold text-green-600">Bob's Results:</div>
+                    {simulationData.map((data, index) => (
+                      <div key={index} className={`w-8 h-8 flex items-center justify-center text-sm font-bold rounded ${
+                        data.isKept ? 'bg-indigo-600 text-white' : 
+                        data.basesMatch ? 'bg-green-100 text-green-800' : 
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {data.isKept ? data.bobMeasurement : data.basesMatch ? data.bobMeasurement : '·'}
                       </div>
+                    ))}
+                  </div>
 
-                      {/* Bob's Measurements */}
-                      <div className="flex items-center space-x-1">
-                        <div className="w-32 text-sm font-medium text-purple-600">Bob's Bits:</div>
-                        {simulationResult.bobBits.map((bit: number, i: number) => {
-                          const isMatching = simulationResult.aliceBases[i] === simulationResult.bobBases[i];
-                          const isNoisy = simulationResult.aliceBits[i] !== bit && isMatching;
-                          const isIntercepted = Math.random() < eavesdropping / 100;
-                          
-                          return (
-                            <div 
-                              key={i} 
-                              className={`w-8 h-8 border rounded flex items-center justify-center text-sm font-mono font-bold ${
-                                isIntercepted ? 'bg-red-100 border-red-300 text-red-700' :
-                                isNoisy ? 'bg-yellow-100 border-yellow-300 text-yellow-700' :
-                                'bg-purple-100 border-purple-300 text-purple-700'
-                              }`}
-                            >
-                              {bit}
-                            </div>
-                          );
-                        })}
+                  {/* Final Key Row */}
+                  <div className="flex items-center space-x-1">
+                    <div className="w-32 text-sm font-semibold text-indigo-600">Final Key:</div>
+                    {simulationData.map((data, index) => (
+                      <div key={index} className={`w-8 h-8 flex items-center justify-center text-sm font-bold rounded ${
+                        data.isKept ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                        {data.isKept ? data.aliceBit : '·'}
                       </div>
-
-                      {/* Final Key */}
-                      <div className="flex items-center space-x-1">
-                        <div className="w-32 text-sm font-medium text-green-600">Final Key:</div>
-                        {simulationResult.aliceBits.map((bit: number, i: number) => {
-                          const isMatching = simulationResult.aliceBases[i] === simulationResult.bobBases[i];
-                          const isCorrect = bit === simulationResult.bobBits[i];
-                          const isKept = isMatching && isCorrect;
-                          
-                          return (
-                            <div 
-                              key={i} 
-                              className={`w-8 h-8 border rounded flex items-center justify-center text-sm font-mono font-bold ${
-                                isKept 
-                                  ? 'bg-green-100 border-green-300 text-green-700' 
-                                  : 'bg-gray-100 border-gray-300 text-gray-400'
-                              }`}
-                            >
-                              {isKept ? bit : '·'}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* QBER Analysis */}
+          {simulationData.length > 0 && qberData && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">
+                📊 QBER Analysis & Security Assessment
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                    <span className="font-medium">QBER (Quantum Bit Error Rate):</span>
+                    <span className={`font-bold ${qberData.qber > qberData.securityThreshold ? 'text-red-600' : 'text-green-600'}`}>
+                      {qberData.qber.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                    <span className="font-medium">Security Status:</span>
+                    <span className={`font-bold ${qberData.isSecure ? 'text-green-600' : 'text-red-600'}`}>
+                      {qberData.isSecure ? '✅ SECURE' : '❌ COMPROMISED'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                    <span className="font-medium">Security Threshold:</span>
+                    <span className="font-bold text-gray-700">{qberData.securityThreshold}%</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                    <span className="font-medium">Estimated Eavesdropping:</span>
+                    <span className="font-bold text-orange-600">{qberData.estimatedEavesdropping.toFixed(1)}%</span>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
+                    <span className="font-medium">Total Qubits Sent:</span>
+                    <span className="font-bold text-blue-600">{qberData.totalBits}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
+                    <span className="font-medium">Matching Bases:</span>
+                    <span className="font-bold text-blue-600">{qberData.matchingBases}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-green-50 rounded">
+                    <span className="font-medium">Correct Measurements:</span>
+                    <span className="font-bold text-green-600">{qberData.correctBits}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-red-50 rounded">
+                    <span className="font-medium">Error Count:</span>
+                    <span className="font-bold text-red-600">{qberData.errors}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* QBER Visualization Graph */}
+              <div className="mt-6">
+                <h4 className="text-lg font-semibold mb-3 text-gray-800">QBER Visualization</h4>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-end space-x-2 h-32">
+                    {/* Correct Bits Bar */}
+                    <div className="flex flex-col items-center">
+                      <div 
+                        className="bg-green-500 rounded-t w-16 transition-all duration-1000"
+                        style={{ height: `${(qberData.correctBits / qberData.matchingBases) * 100}%` }}
+                      ></div>
+                      <span className="text-xs mt-2 text-center">Correct<br/>({qberData.correctBits})</span>
+                    </div>
+                    {/* Error Bits Bar */}
+                    <div className="flex flex-col items-center">
+                      <div 
+                        className="bg-red-500 rounded-t w-16 transition-all duration-1000"
+                        style={{ height: `${(qberData.errors / qberData.matchingBases) * 100}%` }}
+                      ></div>
+                      <span className="text-xs mt-2 text-center">Errors<br/>({qberData.errors})</span>
+                    </div>
+                    {/* QBER Threshold Line */}
+                    <div className="flex flex-col items-center ml-4">
+                      <div className="relative h-32 w-1">
+                        <div 
+                          className="absolute w-8 h-0.5 bg-orange-500 -left-4"
+                          style={{ bottom: `${qberData.securityThreshold}%` }}
+                        ></div>
+                        <span 
+                          className="absolute text-xs text-orange-600 -left-12 whitespace-nowrap"
+                          style={{ bottom: `${qberData.securityThreshold - 2}%` }}
+                        >
+                          {qberData.securityThreshold}% Threshold
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-center mt-4">
+                    <p className="text-sm text-gray-600">
+                      QBER: <span className="font-bold">{qberData.qber.toFixed(2)}%</span> 
+                      {qberData.isSecure ? ' (Below threshold - Secure)' : ' (Above threshold - Compromised)'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Statistics */}
+          {simulationData.length > 0 && (
+            <div className="grid md:grid-cols-3 gap-4 mt-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-blue-800">Key Efficiency</h4>
+                <p className="text-2xl font-bold text-blue-600">{stats.efficiency.toFixed(1)}%</p>
+              </div>
+              <div className="bg-red-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-red-800">Error Rate</h4>
+                <p className="text-2xl font-bold text-red-600">{stats.errorRate.toFixed(1)}%</p>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-green-800">Final Key Length</h4>
+                <p className="text-2xl font-bold text-green-600">{stats.finalKeyLength} bits</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1351,146 +1115,166 @@ const App: React.FC = () => {
   );
 
   const ReportsSection = () => {
+    const stats = calculateStats();
+    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="max-w-7xl mx-auto p-6">
-          <div className="space-y-6">
-            {simulationResult && (
-              <div className="space-y-6">
-                <div className="bg-white p-6 rounded-lg shadow-sm">
-                  <h3 className="text-xl font-semibold mb-4 text-gray-800">Experiment Report</h3>
-                  
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-semibold text-gray-700 mb-2">Aim</h4>
-                      <p className="text-gray-600">
-                        To demonstrate the BB84 quantum key distribution protocol and analyze its security 
-                        characteristics under various noise and eavesdropping conditions.
+      <div className="max-w-6xl mx-auto p-6 space-y-6">
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <h2 className="text-3xl font-bold text-gray-800 mb-8 flex items-center">
+            <BarChart3 className="mr-3 text-indigo-600" />
+            Experiment Report
+          </h2>
+
+          {experimentResults.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">Run some experiments to generate reports!</p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {/* Graph Section */}
+              {qberData && (
+                <div className="mb-8">
+                  <h3 className="text-xl font-semibold mb-4 text-gray-800">📈 Experimental Graphs</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* QBER vs Security Threshold Graph */}
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="font-semibold mb-3 text-center">QBER vs Security Threshold</h4>
+                      <div className="relative h-48 flex items-end justify-center space-x-8">
+                        <div className="flex flex-col items-center">
+                          <div 
+                            className="bg-blue-500 rounded-t w-12 transition-all duration-1000"
+                            style={{ height: `${Math.min((qberData.qber / 20) * 100, 100)}%` }}
+                          ></div>
+                          <span className="text-xs mt-2">Current QBER<br/>{qberData.qber.toFixed(1)}%</span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <div 
+                            className="bg-orange-500 rounded-t w-12"
+                            style={{ height: `${(qberData.securityThreshold / 20) * 100}%` }}
+                          ></div>
+                          <span className="text-xs mt-2">Threshold<br/>{qberData.securityThreshold}%</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Key Efficiency Graph */}
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="font-semibold mb-3 text-center">Key Generation Efficiency</h4>
+                      <div className="relative h-48 flex items-end justify-center">
+                        <div className="w-32 bg-gray-200 rounded">
+                          <div 
+                            className="bg-gradient-to-t from-green-500 to-green-400 rounded transition-all duration-1000"
+                            style={{ height: `${qberData.efficiency}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      <p className="text-center mt-2 text-sm">
+                        Efficiency: <span className="font-bold">{qberData.efficiency.toFixed(1)}%</span>
                       </p>
                     </div>
-
-                    <div>
-                      <h4 className="font-semibold text-gray-700 mb-2">Apparatus</h4>
-                      <ul className="text-gray-600 space-y-1">
-                        <li>• Quantum Communication Simulator (BB84 Protocol)</li>
-                        <li>• Photon polarization states (|0⟩, |1⟩, |+⟩, |-⟩)</li>
-                        <li>• Rectilinear and Diagonal measurement bases</li>
-                        <li>• Noise and eavesdropping simulation modules</li>
-                        <li>• QBER calculation and analysis tools</li>
-                      </ul>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold text-gray-700 mb-2">Theory</h4>
-                      <p className="text-gray-600">
-                        The BB84 protocol uses quantum mechanics principles to detect eavesdropping. 
-                        Alice encodes bits using random polarization bases, Bob measures with random bases, 
-                        and they publicly compare bases to generate a secure key. The Quantum Bit Error Rate (QBER) 
-                        indicates potential eavesdropping when it exceeds the theoretical threshold of 11%.
-                      </p>
-                    </div>
-
-                    {simulationResult && (
-                      <>
-                        <div>
-                          <h4 className="font-semibold text-gray-700 mb-4">Experimental Data & Graphs</h4>
-                          
-                          {/* QBER Analysis Graph */}
-                          <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                            <h5 className="font-medium mb-3">QBER vs Security Threshold</h5>
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span>Measured QBER</span>
-                                <span className="font-mono">{calculateQBER(simulationResult).toFixed(2)}%</span>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-6 relative">
-                                <div 
-                                  className={`h-6 rounded-full transition-all duration-500 ${
-                                    calculateQBER(simulationResult) > 11 ? 'bg-red-500' : 'bg-green-500'
-                                  }`}
-                                  style={{ width: `${Math.min(calculateQBER(simulationResult) * 2, 100)}%` }}
-                                ></div>
-                                <div className="absolute top-0 left-[22%] w-1 h-6 bg-yellow-500"></div>
-                                <div className="absolute top-0 left-[22%] -mt-6 text-xs text-yellow-600">11%</div>
-                              </div>
-                              <div className="flex justify-between text-xs text-gray-500">
-                                <span>0%</span>
-                                <span>25%</span>
-                                <span>50%</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Efficiency Graph */}
-                          <div className="bg-gray-50 p-4 rounded-lg">
-                            <h5 className="font-medium mb-3">Key Generation Efficiency</h5>
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span>Efficiency Rate</span>
-                                <span className="font-mono">{((simulationResult.finalKeyLength / simulationResult.totalBits) * 100).toFixed(1)}%</span>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-6">
-                                <div 
-                                  className="bg-indigo-500 h-6 rounded-full transition-all duration-500"
-                                  style={{ width: `${(simulationResult.finalKeyLength / simulationResult.totalBits) * 100}%` }}
-                                ></div>
-                              </div>
-                              <div className="flex justify-between text-xs text-gray-500">
-                                <span>0%</span>
-                                <span>50%</span>
-                                <span>100%</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h4 className="font-semibold text-gray-700 mb-2">Observations</h4>
-                          <div className="bg-gray-50 p-4 rounded-lg">
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <strong>Total Qubits Transmitted:</strong> {simulationResult.totalBits}
-                              </div>
-                              <div>
-                                <strong>Matching Bases:</strong> {simulationResult.matchingBases}
-                              </div>
-                              <div>
-                                <strong>Bit Errors Detected:</strong> {simulationResult.errors}
-                              </div>
-                              <div>
-                                <strong>Final Key Length:</strong> {simulationResult.finalKeyLength} bits
-                              </div>
-                              <div>
-                                <strong>QBER Measured:</strong> {calculateQBER(simulationResult).toFixed(2)}%
-                              </div>
-                              <div>
-                                <strong>Security Status:</strong> 
-                                <span className={calculateQBER(simulationResult) > 11 ? 'text-red-600 ml-1' : 'text-green-600 ml-1'}>
-                                  {calculateQBER(simulationResult) > 11 ? 'COMPROMISED' : 'SECURE'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h4 className="font-semibold text-gray-700 mb-2">Conclusion</h4>
-                          <p className="text-gray-600">
-                            {calculateQBER(simulationResult) > 11 
-                              ? `The experiment shows a QBER of ${calculateQBER(simulationResult).toFixed(2)}%, which exceeds the security threshold of 11%. This indicates potential eavesdropping activity. The communication channel is compromised and the generated key should not be used for secure communication.`
-                              : `The experiment successfully demonstrates secure quantum key distribution with a QBER of ${calculateQBER(simulationResult).toFixed(2)}%, which is below the security threshold of 11%. The generated ${simulationResult.finalKeyLength}-bit key can be safely used for cryptographic purposes.`
-                            }
-                            {' '}The efficiency of key generation was {((simulationResult.finalKeyLength / simulationResult.totalBits) * 100).toFixed(1)}%, 
-                            which is typical for BB84 protocol implementations.
-                          </p>
-                        </div>
-                      </>
-                    )}
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+
+              {/* Aim */}
+              <section>
+                <h3 className="text-xl font-semibold text-gray-800 mb-3 border-b-2 border-blue-500 pb-2">🎯 Aim</h3>
+                <p className="text-gray-700">
+                  To study the BB84 quantum key distribution protocol and analyze the effects of channel noise 
+                  and eavesdropping on QBER (Quantum Bit Error Rate) and security.
+                </p>
+              </section>
+
+              {/* Apparatus */}
+              <section>
+                <h3 className="text-xl font-semibold text-gray-800 mb-3 border-b-2 border-green-500 pb-2">🔬 Apparatus</h3>
+                <ul className="text-gray-700 space-y-2">
+                  <li>• Quantum photon source (Alice's transmitter)</li>
+                  <li>• Polarization modulators (rectilinear and diagonal bases)</li>
+                  <li>• Quantum channel (fiber optic communication link)</li>
+                  <li>• Photon detectors with basis selection (Bob's receiver)</li>
+                  <li>• Classical communication channel for basis comparison</li>
+                  <li>• Noise simulation and eavesdropping detection system</li>
+                </ul>
+              </section>
+
+              {/* Theory */}
+              <section>
+                <h3 className="text-xl font-semibold text-gray-800 mb-3 border-b-2 border-purple-500 pb-2">📚 Theory</h3>
+                <p className="text-gray-700 mb-4">
+                  The BB84 protocol uses quantum mechanics principles to establish a secure cryptographic key. 
+                  Alice (Transmitter) encodes random bits using photon polarization in randomly chosen bases. 
+                  Bob (Receiver) measures these photons using randomly chosen bases. Due to quantum mechanics, 
+                  measurements in the wrong basis yield random results.
+                </p>
+                <p className="text-gray-700">
+                  Security is guaranteed by the no-cloning theorem and the measurement disturbance principle. 
+                  Any eavesdropping attempt by Eve introduces detectable errors in the transmission.
+                </p>
+              </section>
+
+              {/* Observations */}
+              <section>
+                <h3 className="text-xl font-semibold text-gray-800 mb-3 border-b-2 border-red-500 pb-2">👁️ Observations</h3>
+                {qberData ? (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-gray-700 mb-3">Experimental Results:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p><strong>Total Qubits Transmitted:</strong> {qberData.totalBits}</p>
+                        <p><strong>Matching Basis Count:</strong> {qberData.matchingBases}</p>
+                        <p><strong>Error Count:</strong> {qberData.errors}</p>
+                        <p><strong>QBER:</strong> {qberData.qber.toFixed(2)}%</p>
+                      </div>
+                      <div>
+                        <p><strong>Final Key Length:</strong> {qberData.finalKeyLength} bits</p>
+                        <p><strong>Key Efficiency:</strong> {qberData.efficiency.toFixed(1)}%</p>
+                        <p><strong>Security Status:</strong> 
+                          <span className={qberData.isSecure ? 'text-green-600' : 'text-red-600'}>
+                            {qberData.isSecure ? ' SECURE' : ' COMPROMISED'}
+                          </span>
+                        </p>
+                        <p><strong>Estimated Eavesdropping:</strong> {qberData.estimatedEavesdropping.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-gray-700">Run a simulation to see detailed observations and QBER analysis.</p>
+                  </div>
+                )}
+              </section>
+
+              {/* Conclusion */}
+              <section>
+                <h3 className="text-xl font-semibold text-gray-800 mb-3 border-b-2 border-indigo-500 pb-2">🎓 Conclusion</h3>
+                {qberData ? (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-gray-700 mb-3">
+                      The BB84 protocol simulation demonstrates:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 text-gray-700">
+                      <li>QBER of {qberData.qber.toFixed(2)}% {qberData.isSecure ? 'indicates secure communication' : 'suggests potential eavesdropping'}</li>
+                      <li>Key generation efficiency of {qberData.efficiency.toFixed(1)}% from {qberData.totalBits} transmitted qubits</li>
+                      <li>{qberData.matchingBases} qubits had matching bases, yielding {qberData.finalKeyLength} secure key bits</li>
+                      <li>
+                        {qberData.isSecure 
+                          ? 'The communication channel is secure for cryptographic use' 
+                          : 'The high error rate indicates potential security compromise - key should be discarded'
+                        }
+                      </li>
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-gray-700">
+                      Run a simulation to generate detailed conclusions based on experimental data and QBER analysis.
+                    </p>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
         </div>
       </div>
     );
