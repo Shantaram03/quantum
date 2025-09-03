@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Zap, Shield, Brain, Play, RotateCcw, ChevronRight, CheckCircle, XCircle, BarChart3, ChevronLeft, Radio } from 'lucide-react';
+import { Key, Zap, Shield, Brain, Play, RotateCcw, ChevronRight, CheckCircle, XCircle, BarChart3, ChevronLeft, Radio, Monitor, Wifi } from 'lucide-react';
 
 // Types
 interface QubitData {
@@ -48,6 +48,126 @@ const App: React.FC = () => {
   const [qberData, setQberData] = useState<any>(null);
   const [stepMode, setStepMode] = useState(false);
   const [isTransmitting, setIsTransmitting] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [stepByStep, setStepByStep] = useState(false);
+  const [showPreQuiz, setShowPreQuiz] = useState(true);
+  const [quizCompleted, setQuizCompleted] = useState(false);
+  const [showTheory, setShowTheory] = useState(false);
+  const [theoryStep, setTheoryStep] = useState(0);
+  const [classicalBitAnimation, setClassicalBitAnimation] = useState(false);
+  const [quantumBitAnimation, setQuantumBitAnimation] = useState(false);
+
+  // Generate random bits and bases
+  const [aliceBits] = useState(() => Array.from({length: 8}, () => Math.random() > 0.5 ? 1 : 0));
+  const [aliceBases] = useState(() => Array.from({length: 8}, () => Math.random() > 0.5 ? 1 : 0));
+  const [bobBases] = useState(() => Array.from({length: 8}, () => Math.random() > 0.5 ? 1 : 0));
+
+  // Quiz questions and answers
+  const quizQuestions = [
+    {
+      question: "What is the smallest unit of digital information in a computer?",
+      options: ["Byte", "Bit", "Qubit", "File"],
+      correct: 1
+    },
+    {
+      question: "What is the main purpose of cryptography?",
+      options: ["To make communication faster", "To keep information secure", "To store data in small space", "To improve computer speed"],
+      correct: 1
+    },
+    {
+      question: "Which of these is an example of classical encryption?",
+      options: ["RSA", "AES", "Quantum Key Distribution", "Blockchain"],
+      correct: 1
+    },
+    {
+      question: "What is a \"key\" in cryptography?",
+      options: ["A password that locks and unlocks information", "A file used to increase speed", "A type of software", "A physical USB stick"],
+      correct: 0
+    },
+    {
+      question: "Why is randomness important in generating secure keys?",
+      options: ["To avoid predictable patterns", "To make encryption faster", "To reduce memory usage", "To simplify algorithms"],
+      correct: 0
+    },
+    {
+      question: "What is one main challenge of classical cryptography today?",
+      options: ["It is too slow on the internet", "It can be broken by powerful computers", "It cannot be used on mobile phones", "It needs photons to work"],
+      correct: 1
+    },
+    {
+      question: "What is a qubit?",
+      options: ["A basic unit of classical information", "A binary digit that is only 0 or 1", "A quantum unit that can be in a mix of 0 and 1", "A type of encryption key"],
+      correct: 2
+    },
+    {
+      question: "What does \"superposition\" mean in quantum mechanics?",
+      options: ["A particle is always fixed in one state", "A particle can be in multiple states at once", "A particle is destroyed when measured", "A particle cannot interact with others"],
+      correct: 1
+    },
+    {
+      question: "What does \"entanglement\" mean?",
+      options: ["Two qubits instantly affect each other's states", "Two qubits exist independently", "Two particles collide and merge", "Two particles have the same speed"],
+      correct: 0
+    },
+    {
+      question: "Why do we need secure communication methods today?",
+      options: ["To reduce internet bills", "To watch movies faster", "To protect privacy and prevent hacking", "To improve Wi-Fi range"],
+      correct: 2
+    }
+  ];
+
+  const handleQuizAnswer = (questionIndex: number, answerIndex: number) => {
+    const newAnswers = [...quizAnswers];
+    newAnswers[questionIndex] = answerIndex;
+    setQuizAnswers(newAnswers);
+  };
+
+  const submitQuiz = () => {
+    const score = quizAnswers.reduce((acc, answer, index) => {
+      return acc + (answer === quizQuestions[index].correct ? 1 : 0);
+    }, 0);
+    setQuizScore(score);
+    setQuizCompleted(true);
+  };
+
+  const startTheory = () => {
+    setShowPreQuiz(false);
+    setShowTheory(true);
+  };
+
+  const startSimulation = () => {
+    setShowTheory(false);
+  };
+
+  const animateClassicalBit = () => {
+    setClassicalBitAnimation(true);
+    setTimeout(() => setClassicalBitAnimation(false), 2000);
+  };
+
+  const animateQuantumBit = () => {
+    setQuantumBitAnimation(true);
+    setTimeout(() => setQuantumBitAnimation(false), 2000);
+  };
+
+  // Calculate Bob's measurements
+  const bobMeasurements = aliceBits.map((bit, index) => {
+    if (aliceBases[index] === bobBases[index]) {
+      return bit; // Same basis, correct measurement
+    } else {
+      return Math.random() > 0.5 ? 1 : 0; // Different basis, random result
+    }
+  });
+
+  // Find matching bases
+  const matchingBases = aliceBits.filter((_, index) => aliceBases[index] === bobBases[index]);
+  
+  // Calculate QBER (simplified)
+  const errorCount = aliceBits.filter((bit, index) => 
+    aliceBases[index] === bobBases[index] && bit !== bobMeasurements[index]
+  ).length;
+  
+  const qber = errorCount / matchingBases.length;
+  const isSecure = qber < 0.11;
 
   const preQuizQuestions: QuizQuestion[] = [
     {
@@ -112,7 +232,7 @@ const App: React.FC = () => {
     }
   ];
 
-  const quizQuestions: QuizQuestion[] = [
+  const quizQuestionsMain: QuizQuestion[] = [
     {
       id: 1,
       question: "What happens when Alice (Transmitter) and Bob (Receiver) use different measurement bases?",
@@ -496,10 +616,451 @@ const App: React.FC = () => {
   const handleQuizSubmit = () => {
     let score = 0;
     quizAnswers.forEach((answer, index) => {
-      if (answer === quizQuestions[index].correct) score++;
+      if (answer === quizQuestionsMain[index].correct) score++;
     });
     setQuizScore(score);
   };
+
+  // Pre-Quiz Component
+  if (showPreQuiz) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <Key className="w-12 h-12 text-indigo-600 mr-3" />
+                <h1 className="text-4xl font-bold text-gray-800">KeyGenie: BB84 Magic</h1>
+              </div>
+              <p className="text-xl text-gray-600">Department of Electronics and Telecommunication</p>
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                <h2 className="text-2xl font-semibold text-blue-800 mb-2">Pre-Quiz Assessment</h2>
+                <p className="text-blue-700">Test your understanding of basic concepts before starting the simulation</p>
+              </div>
+            </div>
+
+            {!quizCompleted ? (
+              <div className="space-y-6">
+                {quizQuestions.map((q, qIndex) => (
+                  <div key={qIndex} className="bg-gray-50 p-6 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                      Q{qIndex + 1}. {q.question}
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {q.options.map((option, oIndex) => (
+                        <button
+                          key={oIndex}
+                          onClick={() => handleQuizAnswer(qIndex, oIndex)}
+                          className={`p-3 text-left rounded-lg border-2 transition-all ${
+                            quizAnswers[qIndex] === oIndex
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          {String.fromCharCode(97 + oIndex)}) {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="text-center">
+                  <button
+                    onClick={submitQuiz}
+                    disabled={quizAnswers.includes(-1)}
+                    className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Submit Quiz
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center">
+                <div className="mb-6">
+                  <div className={`text-6xl font-bold mb-4 ${quizScore >= 7 ? 'text-green-600' : quizScore >= 5 ? 'text-yellow-600' : 'text-red-600'}`}>
+                    {quizScore}/10
+                  </div>
+                  <h3 className="text-2xl font-semibold text-gray-800 mb-4">
+                    {quizScore >= 7 ? 'Excellent!' : quizScore >= 5 ? 'Good!' : 'Keep Learning!'}
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    {quizScore >= 7 
+                      ? 'You have a strong foundation in cryptography basics!'
+                      : quizScore >= 5 
+                      ? 'You have a decent understanding. The theory section will help fill gaps.'
+                      : 'The theory section will help you understand these concepts better.'
+                    }
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {quizQuestions.map((q, qIndex) => (
+                    <div key={qIndex} className="bg-gray-50 p-4 rounded-lg text-left">
+                      <p className="font-semibold text-gray-800 mb-2">Q{qIndex + 1}. {q.question}</p>
+                      <div className="flex items-center space-x-4">
+                        <span className={`px-3 py-1 rounded ${
+                          quizAnswers[qIndex] === q.correct ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          Your answer: {String.fromCharCode(97 + quizAnswers[qIndex])} {q.options[quizAnswers[qIndex]]}
+                        </span>
+                        {quizAnswers[qIndex] !== q.correct && (
+                          <span className="px-3 py-1 rounded bg-blue-100 text-blue-800">
+                            Correct: {String.fromCharCode(97 + q.correct)} {q.options[q.correct]}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={startTheory}
+                  className="mt-8 bg-indigo-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+                >
+                  Continue to Theory & Simulations
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Theory Section with Simulations
+  if (showTheory) {
+    const theorySteps = [
+      {
+        title: "Classical vs Quantum Information",
+        content: (
+          <div className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="bg-blue-50 p-6 rounded-lg">
+                <h3 className="text-xl font-semibold text-blue-800 mb-4 flex items-center">
+                  <Monitor className="w-6 h-6 mr-2" />
+                  Classical Bits
+                </h3>
+                <div className="space-y-4">
+                  <p className="text-blue-700">Classical bits are definite: either 0 or 1</p>
+                  <div className="flex justify-center space-x-4">
+                    <div className="bg-white p-4 rounded-lg border-2 border-blue-200">
+                      <div className="text-2xl font-bold text-center">0</div>
+                      <div className="text-sm text-center mt-2">Definite State</div>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border-2 border-blue-200">
+                      <div className="text-2xl font-bold text-center">1</div>
+                      <div className="text-sm text-center mt-2">Definite State</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={animateClassicalBit}
+                    className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Simulate Classical Transmission
+                  </button>
+                  {classicalBitAnimation && (
+                    <div className="bg-white p-4 rounded-lg border">
+                      <div className="flex items-center justify-between">
+                        <div className="text-center">
+                          <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">A</div>
+                          <div className="text-sm mt-1">Alice</div>
+                        </div>
+                        <div className="flex-1 mx-4 relative">
+                          <div className="h-2 bg-gray-200 rounded-full">
+                            <div className="h-2 bg-blue-500 rounded-full animate-pulse" style={{width: '100%'}}></div>
+                          </div>
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                            <div className="animate-bounce bg-blue-600 text-white px-2 py-1 rounded text-xs">1</div>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">B</div>
+                          <div className="text-sm mt-1">Bob</div>
+                        </div>
+                      </div>
+                      <div className="text-center mt-2 text-sm text-gray-600">Classical bit transmitted: Always received as sent</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-purple-50 p-6 rounded-lg">
+                <h3 className="text-xl font-semibold text-purple-800 mb-4 flex items-center">
+                  <Zap className="w-6 h-6 mr-2" />
+                  Quantum Bits (Qubits)
+                </h3>
+                <div className="space-y-4">
+                  <p className="text-purple-700">Qubits can be in superposition: both 0 and 1 simultaneously</p>
+                  <div className="flex justify-center">
+                    <div className="bg-white p-4 rounded-lg border-2 border-purple-200">
+                      <div className="text-2xl font-bold text-center">0 + 1</div>
+                      <div className="text-sm text-center mt-2">Superposition</div>
+                      <div className="text-xs text-center text-gray-500">|ψ⟩ = α|0⟩ + β|1⟩</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={animateQuantumBit}
+                    className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    Simulate Quantum Transmission
+                  </button>
+                  {quantumBitAnimation && (
+                    <div className="bg-white p-4 rounded-lg border">
+                      <div className="flex items-center justify-between">
+                        <div className="text-center">
+                          <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold">A</div>
+                          <div className="text-sm mt-1">Alice</div>
+                        </div>
+                        <div className="flex-1 mx-4 relative">
+                          <div className="h-2 bg-gray-200 rounded-full">
+                            <div className="h-2 bg-purple-500 rounded-full animate-pulse" style={{width: '100%'}}></div>
+                          </div>
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                            <div className="animate-spin bg-purple-600 text-white px-2 py-1 rounded text-xs">|ψ⟩</div>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">B</div>
+                          <div className="text-sm mt-1">Bob</div>
+                        </div>
+                      </div>
+                      <div className="text-center mt-2 text-sm text-gray-600">Quantum state transmitted: Measurement affects the result</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      },
+      {
+        title: "Communication Channels",
+        content: (
+          <div className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="bg-orange-50 p-6 rounded-lg">
+                <h3 className="text-xl font-semibold text-orange-800 mb-4 flex items-center">
+                  <Wifi className="w-6 h-6 mr-2" />
+                  Classical Channel
+                </h3>
+                <div className="space-y-4">
+                  <p className="text-orange-700">Used for public communication and basis comparison</p>
+                  <div className="bg-white p-4 rounded-lg border">
+                    <div className="text-center space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="bg-orange-100 px-3 py-1 rounded">Alice</span>
+                        <span className="text-sm text-gray-600">Public Channel</span>
+                        <span className="bg-orange-100 px-3 py-1 rounded">Bob</span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        "I used basis: R, D, R, D, R..."
+                      </div>
+                      <div className="text-xs text-red-600">⚠️ Eavesdropper can listen</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-green-50 p-6 rounded-lg">
+                <h3 className="text-xl font-semibold text-green-800 mb-4 flex items-center">
+                  <Zap className="w-6 h-6 mr-2" />
+                  Quantum Channel
+                </h3>
+                <div className="space-y-4">
+                  <p className="text-green-700">Used for transmitting quantum states (photons)</p>
+                  <div className="bg-white p-4 rounded-lg border">
+                    <div className="text-center space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="bg-green-100 px-3 py-1 rounded">Alice</span>
+                        <span className="text-sm text-gray-600">Quantum Channel</span>
+                        <span className="bg-green-100 px-3 py-1 rounded">Bob</span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Photons: ↑ → ↗ ↖ ↑...
+                      </div>
+                      <div className="text-xs text-green-600">✓ Eavesdropping detectable</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 p-6 rounded-lg">
+              <h3 className="text-xl font-semibold text-yellow-800 mb-4">Why Two Channels?</h3>
+              <div className="grid md:grid-cols-3 gap-4 text-sm">
+                <div className="bg-white p-4 rounded-lg">
+                  <div className="font-semibold text-yellow-800 mb-2">Security</div>
+                  <div className="text-yellow-700">Quantum channel detects eavesdropping</div>
+                </div>
+                <div className="bg-white p-4 rounded-lg">
+                  <div className="font-semibold text-yellow-800 mb-2">Efficiency</div>
+                  <div className="text-yellow-700">Classical channel for coordination</div>
+                </div>
+                <div className="bg-white p-4 rounded-lg">
+                  <div className="font-semibold text-yellow-800 mb-2">Practicality</div>
+                  <div className="text-yellow-700">Best of both worlds</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      },
+      {
+        title: "BB84 Protocol Overview",
+        content: (
+          <div className="space-y-6">
+            <div className="bg-indigo-50 p-6 rounded-lg">
+              <h3 className="text-xl font-semibold text-indigo-800 mb-4">The BB84 Protocol Steps</h3>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="bg-white p-4 rounded-lg border-l-4 border-indigo-500">
+                    <div className="font-semibold text-indigo-800">Step 1: Preparation</div>
+                    <div className="text-indigo-700 text-sm">Alice prepares random bits in random bases</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border-l-4 border-purple-500">
+                    <div className="font-semibold text-purple-800">Step 2: Transmission</div>
+                    <div className="text-purple-700 text-sm">Alice sends qubits through quantum channel</div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="bg-white p-4 rounded-lg border-l-4 border-green-500">
+                    <div className="font-semibold text-green-800">Step 3: Measurement</div>
+                    <div className="text-green-700 text-sm">Bob measures in random bases</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border-l-4 border-orange-500">
+                    <div className="font-semibold text-orange-800">Step 4: Sifting</div>
+                    <div className="text-orange-700 text-sm">Keep only matching basis measurements</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Basis Vectors in BB84</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-lg text-center border">
+                  <div className="text-2xl mb-2">|0⟩</div>
+                  <div className="text-sm text-gray-600">Rectilinear 0</div>
+                  <div className="text-lg mt-2">↑</div>
+                </div>
+                <div className="bg-white p-4 rounded-lg text-center border">
+                  <div className="text-2xl mb-2">|1⟩</div>
+                  <div className="text-sm text-gray-600">Rectilinear 1</div>
+                  <div className="text-lg mt-2">→</div>
+                </div>
+                <div className="bg-white p-4 rounded-lg text-center border">
+                  <div className="text-2xl mb-2">|+⟩</div>
+                  <div className="text-sm text-gray-600">Diagonal 0</div>
+                  <div className="text-lg mt-2">↗</div>
+                </div>
+                <div className="bg-white p-4 rounded-lg text-center border">
+                  <div className="text-2xl mb-2">|-⟩</div>
+                  <div className="text-sm text-gray-600">Diagonal 1</div>
+                  <div className="text-lg mt-2">↖</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      },
+      {
+        title: "Security Principles",
+        content: (
+          <div className="space-y-6">
+            <div className="bg-red-50 p-6 rounded-lg">
+              <h3 className="text-xl font-semibold text-red-800 mb-4 flex items-center">
+                <Shield className="w-6 h-6 mr-2" />
+                Quantum Security Features
+              </h3>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="bg-white p-4 rounded-lg">
+                    <div className="font-semibold text-red-800 mb-2">No-Cloning Theorem</div>
+                    <div className="text-red-700 text-sm">Quantum states cannot be perfectly copied</div>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg">
+                    <div className="font-semibold text-red-800 mb-2">Measurement Disturbance</div>
+                    <div className="text-red-700 text-sm">Any eavesdropping attempt changes the quantum state</div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg">
+                  <div className="text-center mb-4">
+                    <div className="text-lg font-semibold text-red-800">QBER Threshold</div>
+                    <div className="text-3xl font-bold text-red-600">11%</div>
+                    <div className="text-sm text-red-700">Maximum acceptable error rate</div>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    If error rate > 11%, communication is compromised
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    ];
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <Key className="w-12 h-12 text-indigo-600 mr-3" />
+                <h1 className="text-4xl font-bold text-gray-800">Theory & Concepts</h1>
+              </div>
+              <div className="flex justify-center mb-6">
+                <div className="flex space-x-2">
+                  {theorySteps.map((_, index) => (
+                    <div
+                      key={index}
+                      className={`w-3 h-3 rounded-full ${
+                        index === theoryStep ? 'bg-indigo-600' : index < theoryStep ? 'bg-green-500' : 'bg-gray-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">{theorySteps[theoryStep].title}</h2>
+              {theorySteps[theoryStep].content}
+            </div>
+
+            <div className="flex justify-between">
+              <button
+                onClick={() => setTheoryStep(Math.max(0, theoryStep - 1))}
+                disabled={theoryStep === 0}
+                className="flex items-center px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5 mr-2" />
+                Previous
+              </button>
+
+              {theoryStep < theorySteps.length - 1 ? (
+                <button
+                  onClick={() => setTheoryStep(theoryStep + 1)}
+                  className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-5 h-5 ml-2" />
+                </button>
+              ) : (
+                <button
+                  onClick={startSimulation}
+                  className="flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Start BB84 Simulation
+                  <Play className="w-5 h-5 ml-2" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const TheorySection = () => (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
@@ -1589,7 +2150,7 @@ const App: React.FC = () => {
         </h2>
         
         <div className="space-y-6">
-          {quizQuestions.map((question, index) => (
+          {quizQuestionsMain.map((question, index) => (
             <div key={question.id} className="border rounded-lg p-6">
               <h3 className="text-lg font-semibold mb-4">
                 {index + 1}. {question.question}
@@ -1628,7 +2189,7 @@ const App: React.FC = () => {
         <div className="mt-8 flex justify-between items-center">
           <button
             onClick={handleQuizSubmit}
-            disabled={quizAnswers.length !== quizQuestions.length}
+            disabled={quizAnswers.length !== quizQuestionsMain.length}
             className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             Submit Quiz
@@ -1637,7 +2198,7 @@ const App: React.FC = () => {
           {quizScore !== null && (
             <div className="text-right">
               <p className="text-lg font-semibold">
-                Score: {quizScore}/{quizQuestions.length}
+                Score: {quizScore}/{quizQuestionsMain.length}
               </p>
               <p className={`text-sm ${quizScore >= 4 ? 'text-green-600' : 'text-yellow-600'}`}>
                 {quizScore >= 4 ? 'Excellent understanding!' : 'Review the concepts and try again!'}
@@ -1649,6 +2210,7 @@ const App: React.FC = () => {
     </div>
   );
 
+  // Main simulation interface
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Header */}
@@ -1667,6 +2229,17 @@ const App: React.FC = () => {
             <div className="text-right">
               <p className="text-sm text-gray-600">Department of Electronics and Telecommunication</p>
               <p className="text-xs text-gray-500">Quantum Communication Simulator</p>
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => {
+                    setShowPreQuiz(true);
+                    setShowTheory(false);
+                  }}
+                  className="text-indigo-600 hover:text-indigo-800 underline"
+                >
+                  ← Back to Quiz & Theory
+                </button>
+              </div>
             </div>
           </div>
         </div>
