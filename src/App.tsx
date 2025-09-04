@@ -990,7 +990,7 @@ const App: React.FC = () => {
                     <div className="text-sm text-red-700">Maximum acceptable error rate</div>
                   </div>
                   <div className="text-xs text-gray-600">
-                    If error rate more than 11%, communication is compromised
+                    If error rate {'>'} 11%, communication is compromised
                   </div>
                 </div>
               </div>
