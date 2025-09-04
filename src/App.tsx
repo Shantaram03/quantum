@@ -1177,81 +1177,222 @@ const App: React.FC = () => {
     </div>
   );
 
-  const PreQuizSection = () => (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-lg p-8">
-        <h2 className="text-3xl font-bold text-gray-800 mb-6 flex items-center">
-          <CheckCircle className="mr-3 text-green-600" />
-          Pre-Quiz: Test Your Basic Understanding
-        </h2>
-        
-        <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-          <p className="text-blue-800">
-            Before diving into the simulation, let's check if you understand the basic concepts. 
-            Don't worry if you don't get everything right - this helps us know what to focus on!
-          </p>
-        </div>
+  const PreQuizSection = () => {
+    const questions = [
+      {
+        question: "What is the main advantage of quantum key distribution?",
+        options: [
+          "It's faster than classical methods",
+          "It's cheaper to implement",
+          "It provides information-theoretic security",
+          "It requires less infrastructure"
+        ],
+        correct: 2
+      },
+      {
+        question: "In the BB84 protocol, what do the four polarization states represent?",
+        options: [
+          "Different encryption keys",
+          "Binary bits (0,1) in two different bases",
+          "Error correction codes",
+          "Authentication tokens"
+        ],
+        correct: 1
+      },
+      {
+        question: "What happens when Eve tries to intercept quantum bits?",
+        options: [
+          "Nothing, she can copy them perfectly",
+          "The communication stops immediately",
+          "She introduces detectable errors due to quantum measurement",
+          "The bits become encrypted automatically"
+        ],
+        correct: 2
+      },
+      {
+        question: "What is the purpose of basis reconciliation in BB84?",
+        options: [
+          "To encrypt the final key",
+          "To identify which bits were measured in the same basis",
+          "To detect all eavesdropping attempts",
+          "To compress the quantum data"
+        ],
+        correct: 1
+      },
+      {
+        question: "Why can't quantum information be copied perfectly?",
+        options: [
+          "Quantum computers are not powerful enough",
+          "The no-cloning theorem prevents perfect copying of unknown quantum states",
+          "It would violate classical physics",
+          "The technology doesn't exist yet"
+        ],
+        correct: 1
+      },
+      {
+        question: "What is privacy amplification in quantum cryptography?",
+        options: [
+          "Making the quantum channel louder",
+          "Increasing the number of qubits sent",
+          "A process to reduce Eve's information about the final key",
+          "Encrypting the quantum states"
+        ],
+        correct: 2
+      },
+      {
+        question: "In BB84, what percentage of bits are typically discarded during basis reconciliation?",
+        options: [
+          "About 25%",
+          "About 50%",
+          "About 75%",
+          "About 90%"
+        ],
+        correct: 1
+      },
+      {
+        question: "What is the quantum bit error rate (QBER) threshold for secure communication?",
+        options: [
+          "0%",
+          "Around 11%",
+          "25%",
+          "50%"
+        ],
+        correct: 1
+      },
+      {
+        question: "What makes quantum key distribution 'future-proof'?",
+        options: [
+          "It will get faster with better computers",
+          "Its security is based on quantum physics laws, not computational complexity",
+          "It can be easily upgraded",
+          "It's compatible with all existing systems"
+        ],
+        correct: 1
+      },
+      {
+        question: "What is the main challenge in practical QKD implementation?",
+        options: [
+          "Quantum computers are too expensive",
+          "Distance limitations and noise in quantum channels",
+          "Lack of quantum internet",
+          "Insufficient classical computing power"
+        ],
+        correct: 1
+      }
+    ];
 
-        <div className="space-y-6">
-          {preQuizQuestions.map((question, index) => (
-            <div key={question.id} className="border rounded-lg p-6">
-              <h3 className="text-lg font-semibold mb-4">
-                {index + 1}. {question.question}
-              </h3>
-              <div className="space-y-2">
-                {question.options.map((option, optionIndex) => (
-                  <label key={optionIndex} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
-                    <input
-                      type="radio"
-                      name={`prequiz-${question.id}`}
-                      value={optionIndex}
-                      onChange={(e) => {
-                        const newAnswers = [...preQuizAnswers];
-                        newAnswers[index] = parseInt(e.target.value);
-                        setPreQuizAnswers(newAnswers);
-                      }}
-                      className="text-blue-600"
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <Key className="w-12 h-12 text-indigo-600 mr-3" />
+                <h1 className="text-4xl font-bold text-gray-800">KeyGenie: BB84 Magic</h1>
               </div>
-              
-              {preQuizScore !== null && (
-                <div className={`mt-4 p-3 rounded ${preQuizAnswers[index] === question.correct ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                  <p className={`font-semibold ${preQuizAnswers[index] === question.correct ? 'text-green-800' : 'text-red-800'}`}>
-                    {preQuizAnswers[index] === question.correct ? '✅ Correct!' : '❌ Incorrect'}
-                  </p>
-                  <p className="text-gray-700 mt-2">{question.explanation}</p>
-                </div>
-              )}
+              <p className="text-xl text-gray-600">Department of Electronics and Telecommunication</p>
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                <h2 className="text-2xl font-semibold text-blue-800 mb-2">Pre-Quiz Assessment</h2>
+                <p className="text-blue-700">Test your understanding of basic concepts before starting the simulation</p>
+              </div>
             </div>
-          ))}
-        </div>
 
-        <div className="mt-8 flex justify-between items-center">
-          <button
-            onClick={handlePreQuizSubmit}
-            disabled={preQuizAnswers.length !== preQuizQuestions.length}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-          >
-            Submit Pre-Quiz
-          </button>
-          
-          {preQuizScore !== null && (
-            <div className="text-right">
-              <p className="text-lg font-semibold">
-                Score: {preQuizScore}/{preQuizQuestions.length}
-              </p>
-              <p className={`text-sm ${preQuizScore >= 3 ? 'text-green-600' : 'text-yellow-600'}`}>
-                {preQuizScore >= 3 ? 'Great! You\'re ready for the simulation.' : 'Review the theory and try again!'}
-              </p>
+            <div className="space-y-6">
+              {questions.map((q, qIndex) => (
+                <div key={qIndex} className="bg-gray-50 p-6 rounded-lg">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    Q{qIndex + 1}. {q.question}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {q.options.map((option, oIndex) => (
+                      <button
+                        key={oIndex}
+                        onClick={() => handleQuizAnswer(qIndex, oIndex)}
+                        className={`p-3 text-left rounded-lg border-2 transition-all ${
+                          quizAnswers[qIndex] === oIndex
+                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        {String.fromCharCode(97 + oIndex)}) {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div className="text-center">
+                <button
+                  onClick={submitQuiz}
+                  disabled={quizAnswers.includes(-1)}
+                  className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  Submit Quiz
+                </button>
+              </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  const PostQuiz = () => {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <Key className="w-12 h-12 text-indigo-600 mr-3" />
+                <h1 className="text-4xl font-bold text-gray-800">KeyGenie: BB84 Magic</h1>
+              </div>
+              <p className="text-xl text-gray-600">Department of Electronics and Telecommunication</p>
+              <div className="mt-6 p-4 bg-green-50 rounded-lg">
+                <h2 className="text-2xl font-semibold text-green-800 mb-2">Post-Quiz Assessment</h2>
+                <p className="text-green-700">Test your understanding after completing the simulation</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {questions.map((q, qIndex) => (
+                <div key={qIndex} className="bg-gray-50 p-6 rounded-lg">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    Q{qIndex + 1}. {q.question}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {q.options.map((option, oIndex) => (
+                      <button
+                        key={oIndex}
+                        onClick={() => handleQuizAnswer(qIndex, oIndex)}
+                        className={`p-3 text-left rounded-lg border-2 transition-all ${
+                          quizAnswers[qIndex] === oIndex
+                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        {String.fromCharCode(97 + oIndex)}) {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div className="text-center">
+                <button
+                  onClick={submitQuiz}
+                  disabled={quizAnswers.includes(-1)}
+                  className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  Submit Quiz
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const ObjectiveSection = () => (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
@@ -2290,3 +2431,5 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+export default App;
