@@ -52,63 +52,73 @@ const App: React.FC = () => {
   const preQuizQuestions: QuizQuestion[] = [
     {
       id: 1,
-      question: "What is a photon in simple terms?",
-      options: [
-        "A tiny particle of light",
-        "A type of electron",
-        "A sound wave",
-        "A magnetic field"
-      ],
-      correct: 0,
-      explanation: "A photon is the smallest unit of light - think of it as a tiny packet of light energy that travels at the speed of light."
+      question: "What is the smallest unit of digital information in a computer?",
+      options: ["Byte", "Bit", "Qubit", "File"],
+      correct: 1,
+      explanation: "A bit (binary digit) is the smallest unit of digital information in a computer, representing either 0 or 1."
     },
     {
       id: 2,
-      question: "What does 'polarization' mean for light?",
-      options: [
-        "How bright the light is",
-        "The direction the light wave vibrates",
-        "How fast light travels",
-        "The color of the light"
-      ],
+      question: "What is the main purpose of cryptography?",
+      options: ["To make communication faster", "To keep information secure", "To store data in small space", "To improve computer speed"],
       correct: 1,
-      explanation: "Polarization is like the orientation of a wave - imagine a rope being shaken up-down vs left-right. Light waves can vibrate in different directions."
+      explanation: "The main purpose of cryptography is to keep information secure by protecting it from unauthorized access."
     },
     {
       id: 3,
-      question: "In quantum mechanics, what happens when you measure a quantum particle?",
-      options: [
-        "Nothing changes",
-        "It gets destroyed",
-        "It changes to match your measurement",
-        "It becomes classical"
-      ],
-      correct: 2,
-      explanation: "This is the key principle of quantum mechanics - measuring a quantum particle forces it to 'choose' a definite state, which might be different from what it was before."
+      question: "Which of these is an example of classical encryption?",
+      options: ["RSA", "AES", "Quantum Key Distribution", "Blockchain"],
+      correct: 1,
+      explanation: "AES (Advanced Encryption Standard) is a widely used classical encryption algorithm for securing data."
     },
     {
       id: 4,
-      question: "What is the main goal of quantum cryptography?",
-      options: [
-        "To make computers faster",
-        "To create unbreakable secret communication",
-        "To store more data",
-        "To reduce internet costs"
-      ],
-      correct: 1,
-      explanation: "Quantum cryptography uses the laws of physics to create communication that is theoretically impossible to hack without being detected."
+      question: "What is a \"key\" in cryptography?",
+      options: ["A password that locks and unlocks information", "A file used to increase speed", "A type of software", "A physical USB stick"],
+      correct: 0,
+      explanation: "In cryptography, a key is like a password that is used to lock (encrypt) and unlock (decrypt) information."
     },
     {
       id: 5,
-      question: "Why can't someone secretly copy quantum information?",
-      options: [
-        "It's too expensive",
-        "The technology doesn't exist",
-        "Quantum mechanics prevents perfect copying",
-        "It's illegal"
-      ],
+      question: "Why is randomness important in generating secure keys?",
+      options: ["To avoid predictable patterns", "To make encryption faster", "To reduce memory usage", "To simplify algorithms"],
+      correct: 0,
+      explanation: "Randomness is crucial in key generation to avoid predictable patterns that could be exploited by attackers."
+    },
+    {
+      id: 6,
+      question: "What is one main challenge of classical cryptography today?",
+      options: ["It is too slow on the internet", "It can be broken by powerful computers", "It cannot be used on mobile phones", "It needs photons to work"],
+      correct: 1,
+      explanation: "Classical cryptography faces the challenge that it can potentially be broken by very powerful computers, including future quantum computers."
+    },
+    {
+      id: 7,
+      question: "What is a qubit?",
+      options: ["A basic unit of classical information", "A binary digit that is only 0 or 1", "A quantum unit that can be in a mix of 0 and 1", "A type of encryption key"],
       correct: 2,
-      explanation: "The 'No-Cloning Theorem' in quantum mechanics states that you cannot make a perfect copy of an unknown quantum state - this is a fundamental law of physics."
+      explanation: "A qubit is a quantum unit of information that can exist in a superposition of both 0 and 1 states simultaneously."
+    },
+    {
+      id: 8,
+      question: "What does \"superposition\" mean in quantum mechanics?",
+      options: ["A particle is always fixed in one state", "A particle can be in multiple states at once", "A particle is destroyed when measured", "A particle cannot interact with others"],
+      correct: 1,
+      explanation: "Superposition means a quantum particle can exist in multiple states simultaneously until it is measured."
+    },
+    {
+      id: 9,
+      question: "What does \"entanglement\" mean?",
+      options: ["Two qubits instantly affect each other's states", "Two qubits exist independently", "Two particles collide and merge", "Two particles have the same speed"],
+      correct: 0,
+      explanation: "Entanglement is a quantum phenomenon where two qubits become connected and instantly affect each other's states, regardless of distance."
+    },
+    {
+      id: 10,
+      question: "Why do we need secure communication methods today?",
+      options: ["To reduce internet bills", "To watch movies faster", "To protect privacy and prevent hacking", "To improve Wi-Fi range"],
+      correct: 2,
+      explanation: "Secure communication methods are essential today to protect our privacy and prevent hacking of sensitive information."
     }
   ];
 
